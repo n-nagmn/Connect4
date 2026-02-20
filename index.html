@@ -159,11 +159,11 @@
   let board = [];
   let currentPlayer = 1;
   let scores = { 1: 0, 2: 0 };
-  let foundLines = new Set();
   let gameOver = false;
   let questionMarks = new Set();
   let playerItems = { 1: [], 2: [] };
   let activeItemIndex = -1;
+  let currentHighlights = [];
 
   const boardEl = document.getElementById('board');
   const statusEl = document.getElementById('status');
@@ -176,10 +176,10 @@
     board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
     currentPlayer = 1;
     scores = { 1: 0, 2: 0 };
-    foundLines.clear();
     gameOver = false;
     playerItems = { 1: [], 2: [] };
     activeItemIndex = -1;
+    currentHighlights = [];
     
     questionMarks.clear();
     while (questionMarks.size < 6) {
@@ -241,23 +241,38 @@
         }
       }
       allPieces.sort(() => Math.random() - 0.5);
-      for (let p of allPieces) {
-        let rCol = Math.floor(Math.random() * COLS);
-        let rRow = ROWS - 1;
-        while (rRow >= 0 && board[rRow][rCol] !== 0) rRow--;
-        if (rRow >= 0) board[rRow][rCol] = p;
+      
+      let pIdx = 0;
+      let isLeft = Math.random() < 0.5;
+      
+      if (isLeft) {
+        for (let c = 0; c < COLS && pIdx < allPieces.length; c++) {
+          for (let r = ROWS - 1; r >= 0 && pIdx < allPieces.length; r--) {
+            board[r][c] = allPieces[pIdx++];
+          }
+        }
+      } else {
+        for (let c = COLS - 1; c >= 0 && pIdx < allPieces.length; c--) {
+          for (let r = ROWS - 1; r >= 0 && pIdx < allPieces.length; r--) {
+            board[r][c] = allPieces[pIdx++];
+          }
+        }
       }
     } else if (usedItem === '⇔') {
-      let opp = currentPlayer === 1 ? 2 : 1;
-      if (row + 1 < ROWS) board[row + 1][col] = currentPlayer;
-      if (col + 1 < COLS) board[row][col + 1] = currentPlayer;
-      if (col - 1 >= 0) board[row][col - 1] = currentPlayer;
-      board[row][col] = opp;
+      const targets = [[0, 0], [1, 0], [0, 1], [0, -1]];
+      targets.forEach(([dr, dc]) => {
+        let r = row + dr;
+        let c = col + dc;
+        if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+          if (board[r][c] === 1) board[r][c] = 2;
+          else if (board[r][c] === 2) board[r][c] = 1;
+        }
+      });
     }
 
     applyGravity();
     checkQuestionMarks();
-    recalculateScores();
+    calculateScores();
 
     if (scores[currentPlayer] >= WIN_TARGET) {
       endGame(currentPlayer);
@@ -274,7 +289,7 @@
       explodeBottomRows();
       applyGravity();
       checkQuestionMarks();
-      recalculateScores();
+      calculateScores();
       
       if (scores[currentPlayer] >= WIN_TARGET) return endGame(currentPlayer);
       if (scores[opp] >= WIN_TARGET) return endGame(opp);
@@ -331,48 +346,48 @@
     }
   }
 
-  function recalculateScores() {
+  function calculateScores() {
     scores = { 1: 0, 2: 0 };
-    foundLines.clear();
+    currentHighlights = [];
+
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
-        if (board[r][c] !== 0) {
-          registerExistingLines(r, c, board[r][c]);
-        }
+        let player = board[r][c];
+        if (player === 0) continue;
+
+        const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+        directions.forEach(([dr, dc]) => {
+          let prevR = r - dr;
+          let prevC = c - dc;
+          
+          if (prevR >= 0 && prevR < ROWS && prevC >= 0 && prevC < COLS && board[prevR][prevC] === player) {
+            return; 
+          }
+
+          let k = 1;
+          let lineCoords = [`${r},${c}`];
+          while (true) {
+            let nextR = r + dr * k;
+            let nextC = c + dc * k;
+            if (nextR >= 0 && nextR < ROWS && nextC >= 0 && nextC < COLS && board[nextR][nextC] === player) {
+              lineCoords.push(`${nextR},${nextC}`);
+              k++;
+            } else {
+              break;
+            }
+          }
+
+          let lines = Math.floor(k / 4);
+          if (lines > 0) {
+            scores[player] += lines;
+            let highlightCount = lines * 4;
+            for (let i = 0; i < highlightCount; i++) {
+              currentHighlights.push(lineCoords[i]);
+            }
+          }
+        });
       }
     }
-  }
-
-  function registerExistingLines(row, col, player) {
-    const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
-    directions.forEach(([dr, dc]) => {
-      let validLine = true;
-      let lineCoords = [];
-      for (let i = 0; i < 4; i++) {
-        let r = row + dr * i;
-        let c = col + dc * i;
-        if (r < 0 || r >= ROWS || c < 0 || c >= COLS || board[r][c] !== player) {
-          validLine = false;
-          break;
-        }
-        lineCoords.push(`${r},${c}`);
-      }
-      if (validLine) {
-        const signature = lineCoords.sort().join('|');
-        if (!foundLines.has(signature)) {
-          foundLines.add(signature);
-          scores[player]++;
-        }
-      }
-    });
-  }
-
-  function highlightLine(coords) {
-    const cells = boardEl.children;
-    coords.forEach(coord => {
-      const [r, c] = coord.split(',').map(Number);
-      cells[r * COLS + c].classList.add('highlight');
-    });
   }
 
   function isBoardFull() {
@@ -387,10 +402,11 @@
   }
 
   function renderAll() {
+    const cells = boardEl.children;
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const cellIdx = r * COLS + c;
-        const cellEl = boardEl.children[cellIdx];
+        const cellEl = cells[cellIdx];
         cellEl.className = 'cell';
         cellEl.textContent = '';
         
@@ -400,8 +416,9 @@
       }
     }
 
-    foundLines.forEach(signature => {
-      highlightLine(signature.split('|'));
+    currentHighlights.forEach(coord => {
+      const [r, c] = coord.split(',').map(Number);
+      cells[r * COLS + c].classList.add('highlight');
     });
 
     score1El.textContent = scores[1];

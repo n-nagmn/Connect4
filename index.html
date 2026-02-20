@@ -295,6 +295,7 @@
       status: "init"
   };
   let pollingInterval = null;
+  let isUpdating = false;
 
   const boardEl = document.getElementById('board');
   const statusEl = document.getElementById('status');
@@ -321,7 +322,7 @@
   }
 
   function toggleItem(index) {
-    if (gameOver || sysState.status !== 'playing') return;
+    if (gameOver || sysState.status !== 'playing' || isUpdating) return;
     let myNum = sysState.my_role === 'player_1' ? 1 : 2;
     if (currentPlayer !== myNum) return;
     
@@ -330,7 +331,7 @@
   }
 
   async function handleColumnClick(col) {
-    if (gameOver || sysState.status !== 'playing') return;
+    if (gameOver || sysState.status !== 'playing' || isUpdating) return;
     let myNum = sysState.my_role === 'player_1' ? 1 : 2;
     if (currentPlayer !== myNum) return;
     
@@ -339,6 +340,8 @@
       row--;
     }
     if (row < 0) return;
+
+    isUpdating = true;
 
     let usedItem = null;
     if (activeItemIndex !== -1 && playerItems[currentPlayer][activeItemIndex]) {
@@ -429,6 +432,8 @@
     currentPlayer = currentPlayer === 1 ? 2 : 1;
     renderAll();
     await sendStateUpdate();
+    
+    isUpdating = false;
   }
 
   function applyGravity() {
@@ -620,7 +625,7 @@
         winner_id: winner_id
       })
     });
-    fetchState();
+    await fetchState();
   }
 
   startBtn.addEventListener('click', async () => {
@@ -650,9 +655,9 @@
   }
 
   async function fetchState() {
-    if (!sysState.game_id) return;
+    if (!sysState.game_id || isUpdating) return;
     try {
-      const response = await fetch(`api_get_state.php?game_id=${sysState.game_id}`);
+      const response = await fetch(`api_get_state.php?game_id=${sysState.game_id}&t=${Date.now()}`);
       const data = await response.json();
       if (data.error) throw new Error(data.error);
 
@@ -663,7 +668,7 @@
       sysState.player_2_id = data.player_2_id;
 
       if (data.game_state) {
-        let stateObj = JSON.parse(data.game_state);
+        let stateObj = typeof data.game_state === 'string' ? JSON.parse(data.game_state) : data.game_state;
         board = stateObj.board;
         scores = stateObj.scores;
         questionMarks = new Set(stateObj.questionMarks);

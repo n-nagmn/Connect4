@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connect 4</title>
+<style>
+    body {
+        font-family: sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 40px;
+        background-color: #f5f5f5;
+    }
+    #status {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        color: #ff3333;
+    }
+    #board {
+        display: grid;
+        grid-template-columns: repeat(9, 60px);
+        grid-template-rows: repeat(8, 60px);
+        gap: 8px;
+        background-color: #0055ff;
+        padding: 12px;
+        border-radius: 10px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    .cell {
+        width: 60px;
+        height: 60px;
+        background-color: #ffffff;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: inset 0 3px 5px rgba(0,0,0,0.3);
+    }
+    .player1 {
+        background-color: #ff3333;
+        box-shadow: inset 0 -3px 5px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .player2 {
+        background-color: #ffd700;
+        box-shadow: inset 0 -3px 5px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.2);
+    }
+    button {
+        margin-top: 25px;
+        padding: 10px 24px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        background-color: #333;
+        color: white;
+        border: none;
+        border-radius: 5px;
+    }
+    button:hover {
+        background-color: #555;
+    }
+</style>
+</head>
+<body>
+
+<div id="status">プレイヤー1 (赤) のターン</div>
+<div id="board"></div>
+<button onclick="initGame()">リセット</button>
+
+<script>
+    const ROWS = 8;
+    const COLS = 9;
+    let board = [];
+    let currentPlayer = 1;
+    let gameActive = true;
+
+    function initGame() {
+        board = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
+        currentPlayer = 1;
+        gameActive = true;
+        updateStatus();
+        renderBoard();
+    }
+
+    function renderBoard() {
+        const boardDiv = document.getElementById('board');
+        boardDiv.innerHTML = '';
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                if (board[r][c] === 1) cell.classList.add('player1');
+                if (board[r][c] === 2) cell.classList.add('player2');
+                cell.addEventListener('click', () => handleDrop(c));
+                boardDiv.appendChild(cell);
+            }
+        }
+    }
+
+    function handleDrop(col) {
+        if (!gameActive) return;
+        
+        for (let r = ROWS - 1; r >= 0; r--) {
+            if (board[r][col] === 0) {
+                board[r][col] = currentPlayer;
+                renderBoard();
+                
+                if (checkWin(r, col)) {
+                    const status = document.getElementById('status');
+                    status.innerText = `プレイヤー${currentPlayer} ${currentPlayer === 1 ? '(赤)' : '(黄)'} の勝利！`;
+                    gameActive = false;
+                    return;
+                }
+                
+                if (checkTie()) {
+                    const status = document.getElementById('status');
+                    status.innerText = '引き分けです！';
+                    status.style.color = '#333';
+                    gameActive = false;
+                    return;
+                }
+                
+                currentPlayer = currentPlayer === 1 ? 2 : 1;
+                updateStatus();
+                return;
+            }
+        }
+    }
+
+    function updateStatus() {
+        const status = document.getElementById('status');
+        status.innerText = `プレイヤー${currentPlayer} ${currentPlayer === 1 ? '(赤)' : '(黄)'} のターン`;
+        status.style.color = currentPlayer === 1 ? '#ff3333' : '#d4b200';
+    }
+
+    function checkWin(r, c) {
+        return checkDirection(r, c, 1, 0) || // 水平
+               checkDirection(r, c, 0, 1) || // 垂直
+               checkDirection(r, c, 1, 1) || // 斜め (右下がり)
+               checkDirection(r, c, 1, -1);  // 斜め (右上がり)
+    }
+
+    function checkDirection(r, c, dr, dc) {
+        let count = 0;
+        for (let i = -3; i <= 3; i++) {
+            const nr = r + i * dr;
+            const nc = c + i * dc;
+            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc] === currentPlayer) {
+                count++;
+                if (count === 4) return true;
+            } else {
+                count = 0;
+            }
+        }
+        return false;
+    }
+
+    function checkTie() {
+        return board[0].every(cell => cell !== 0);
+    }
+
+    initGame();
+</script>
+</body>
+</html>

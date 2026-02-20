@@ -3,151 +3,264 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Connect 4 (7x9, Items & Explosion)</title>
+<title>Connect 4 - Modern Edition</title>
 <style>
+  :root {
+    --bg-color: #bbccc3;
+    --board-bg: rgba(50, 58, 70, 0.6);
+    --cell-bg: #52689e;
+    --p1-color-1: #f87171;
+    --p1-color-2: #dc2626;
+    --p1-shadow: rgba(220, 38, 38, 0.5);
+    --p2-color-1: #fde047;
+    --p2-color-2: #ca8a04;
+    --p2-shadow: rgba(202, 138, 4, 0.5);
+    --accent: #22d3ee;
+    --text-main: #f8fafc;
+    --text-muted: #fafcff;
+  }
+
   body {
-    font-family: sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     text-align: center;
-    background-color: #f0f0f0;
+    background: radial-gradient(circle at top, #c5baa5, var(--bg-color));
+    color: var(--text-main);
     margin: 0;
     padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
   }
+
   #game-container {
     display: flex;
     flex-direction: column;
     align-items: center;
-  }
-  #info {
-    margin-bottom: 20px;
     width: 100%;
-    max-width: 600px;
+    max-width: 800px;
   }
+
+  h1 {
+    margin: 0 0 20px 0;
+    font-size: 2.5em;
+    font-weight: 800;
+    background: linear-gradient(to right, #ffffff, #ffffff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  }
+
+  #status-container {
+    height: 30px;
+    margin-bottom: 15px;
+  }
+
+  #status {
+    font-size: 1.3em;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--text-main);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+
   #score {
-    font-size: 1.5em;
-    font-weight: bold;
-    margin-bottom: 10px;
     display: flex;
-    justify-content: space-around;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 650px;
+    margin-bottom: 25px;
+    gap: 20px;
   }
-  .player-info {
+
+  .player-card {
+    flex: 1;
+    background: var(--board-bg);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255,255,255,0.05);
+    border-radius: 16px;
+    padding: 15px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
     align-items: center;
   }
+
+  .player-card.active-1 {
+    border-color: var(--p1-color-1);
+    box-shadow: 0 0 20px var(--p1-shadow);
+    transform: translateY(-5px);
+  }
+
+  .player-card.active-2 {
+    border-color: var(--p2-color-1);
+    box-shadow: 0 0 20px var(--p2-shadow);
+    transform: translateY(-5px);
+  }
+
+  .player-name {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+  }
+
+  .player-card.active-1 .player-name { color: var(--p1-color-1); }
+  .player-card.active-2 .player-name { color: var(--p2-color-1); }
+
+  .player-score {
+    font-size: 2.5em;
+    font-weight: 800;
+    line-height: 1;
+  }
+
   .items-container {
     display: flex;
-    gap: 5px;
-    margin-top: 5px;
-    min-height: 35px;
+    gap: 8px;
+    margin-top: 10px;
+    min-height: 44px;
   }
+
   .item-btn {
-    padding: 5px 10px;
+    padding: 8px 12px;
     font-size: 1.2em;
-    border: 2px solid #ccc;
-    border-radius: 5px;
-    background: #fff;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    background: rgba(0,0,0,0.4);
+    color: white;
     cursor: pointer;
-    transition: 0.2s;
+    transition: all 0.2s;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
   }
+
+  .item-btn:hover {
+    background: rgba(255,255,255,0.1);
+    transform: translateY(-2px);
+  }
+
   .item-btn.selected {
-    border-color: #00ff00;
-    background: #e0ffe0;
+    border-color: var(--accent);
+    background: rgba(34, 211, 238, 0.15);
+    box-shadow: 0 0 12px rgba(34, 211, 238, 0.4);
     transform: scale(1.1);
   }
-  #status {
-    font-size: 1.2em;
-    padding: 5px 15px;
-    border-radius: 5px;
-    background: #fff;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-bottom: 15px;
-    display: inline-block;
-  }
+
   #board {
     display: inline-grid;
-    grid-template-columns: repeat(9, 50px);
-    grid-template-rows: repeat(7, 50px);
-    gap: 8px;
-    background: #0044cc;
-    padding: 12px;
-    border-radius: 12px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    grid-template-columns: repeat(9, 55px);
+    grid-template-rows: repeat(7, 55px);
+    gap: 10px;
+    background: var(--board-bg);
+    backdrop-filter: blur(12px);
+    padding: 15px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.05);
   }
+
   .cell {
-    width: 50px;
-    height: 50px;
-    background: #ffffff;
+    width: 55px;
+    height: 55px;
+    background: var(--cell-bg);
     border-radius: 50%;
     cursor: pointer;
-    box-shadow: inset 0 3px 5px rgba(0,0,0,0.2);
-    transition: background 0.2s, transform 0.1s;
+    box-shadow: inset 0 5px 10px rgba(0,0,0,0.8);
+    transition: transform 0.2s;
     position: relative;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 28px;
+    font-size: 24px;
     font-weight: bold;
-    color: rgba(0, 0, 0, 0.4);
+    color: rgb(247, 247, 247);
     user-select: none;
   }
+
   .cell:hover {
-    transform: scale(0.95);
+    background: #151f32;
   }
-  .p1 {
-    background: #ff4444;
-    box-shadow: inset 0 -3px 5px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.2);
-    color: transparent;
+
+  .p1, .p2 {
+    color: transparent; /* 文字を隠す */
   }
-  .p2 {
-    background: #ffdd00;
-    box-shadow: inset 0 -3px 5px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.2);
-    color: transparent;
-  }
-  .highlight::after {
+
+  .p1::before, .p2::before {
     content: '';
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 20px;
-    height: 20px;
-    background: #00ff00;
+    top: 5px; left: 5px; right: 5px; bottom: 5px;
     border-radius: 50%;
-    box-shadow: 0 0 10px #00ff00;
+    box-shadow: inset 0 3px 6px rgba(255,255,255,0.4), 0 4px 8px rgba(0,0,0,0.5);
   }
+
+  .p1::before {
+    background: radial-gradient(circle at 35% 35%, var(--p1-color-1), var(--p1-color-2));
+    box-shadow: inset 0 3px 6px rgba(255,255,255,0.4), 0 0 15px var(--p1-shadow);
+  }
+
+  .p2::before {
+    background: radial-gradient(circle at 35% 35%, var(--p2-color-1), var(--p2-color-2));
+    box-shadow: inset 0 3px 6px rgba(255,255,255,0.6), 0 0 15px var(--p2-shadow);
+  }
+
+  @keyframes winPulse {
+    0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); border: 2px solid transparent; }
+    50% { box-shadow: 0 0 0 12px rgba(34, 197, 94, 0); border: 2px solid #4ade80; }
+    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); border: 2px solid transparent; }
+  }
+
+  .highlight::before {
+    animation: winPulse 1.5s infinite;
+  }
+
   button.action-btn {
-    margin-top: 20px;
-    padding: 10px 20px;
-    font-size: 1em;
+    margin-top: 30px;
+    padding: 12px 30px;
+    font-size: 1.1em;
+    font-weight: bold;
     cursor: pointer;
-    border: none;
-    border-radius: 5px;
-    background-color: #333;
-    color: white;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 30px;
+    background: rgba(30, 41, 59, 0.8);
+    color: var(--text-main);
+    backdrop-filter: blur(5px);
+    transition: all 0.3s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
   }
+
   button.action-btn:hover {
-    background-color: #555;
+    background: rgba(51, 65, 85, 0.9);
+    border-color: rgba(255,255,255,0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
   }
 </style>
 </head>
 <body>
 
 <div id="game-container">
-  <div id="info">
-    <div id="status">プレイヤー1 (赤) のターンです</div>
-    <div id="score">
-      <div class="player-info" style="color:#cc0000;">
-        <div>プレイヤー1 (赤): <span id="score1">0</span></div>
-        <div id="p1-items" class="items-container"></div>
-      </div>
-      <div class="player-info" style="color:#b8860b;">
-        <div>プレイヤー2 (黄): <span id="score2">0</span></div>
-        <div id="p2-items" class="items-container"></div>
-      </div>
+  <h1>CONNECT 4</h1>
+  
+  <div id="score">
+    <div id="p1-card" class="player-card active-1">
+      <div class="player-name">PLAYER 1</div>
+      <div class="player-score" id="score1" style="color: var(--p1-color-1);">0</div>
+      <div id="p1-items" class="items-container"></div>
+    </div>
+    
+    <div id="p2-card" class="player-card">
+      <div class="player-name">PLAYER 2</div>
+      <div class="player-score" id="score2" style="color: var(--p2-color-1);">0</div>
+      <div id="p2-items" class="items-container"></div>
     </div>
   </div>
+
+  <div id="status-container">
+    <div id="status">Player 1 のターンです</div>
+  </div>
+
   <div id="board"></div>
-  <button class="action-btn" onclick="resetGame()">ゲームをリセット</button>
+  <button class="action-btn" onclick="resetGame()">Restart Game</button>
 </div>
 
 <script>
@@ -172,6 +285,8 @@
   const statusEl = document.getElementById('status');
   const score1El = document.getElementById('score1');
   const score2El = document.getElementById('score2');
+  const p1Card = document.getElementById('p1-card');
+  const p2Card = document.getElementById('p2-card');
   const p1ItemsEl = document.getElementById('p1-items');
   const p2ItemsEl = document.getElementById('p2-items');
 
@@ -426,8 +541,10 @@
   function endGame(winner) {
     gameOver = true;
     renderAll();
-    statusEl.textContent = `プレイヤー${winner} (${winner === 1 ? '赤' : '黄'}) の勝利！`;
-    statusEl.style.color = winner === 1 ? '#cc0000' : '#b8860b';
+    statusEl.textContent = `PLAYER ${winner} WINNERS!`;
+    statusEl.style.color = winner === 1 ? 'var(--p1-color-1)' : 'var(--p2-color-1)';
+    p1Card.classList.toggle('active-1', winner === 1);
+    p2Card.classList.toggle('active-2', winner === 2);
   }
 
   function renderAll() {
@@ -457,8 +574,10 @@
     score2El.textContent = scores[2];
     
     if (!gameOver) {
-      statusEl.textContent = `プレイヤー${currentPlayer} (${currentPlayer === 1 ? '赤' : '黄'}) のターンです`;
-      statusEl.style.color = "#000";
+      statusEl.textContent = `Player ${currentPlayer} のターン`;
+      statusEl.style.color = "var(--text-main)";
+      p1Card.classList.toggle('active-1', currentPlayer === 1);
+      p2Card.classList.toggle('active-2', currentPlayer === 2);
     }
     
     renderItems();

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Connect 4 - Modern Edition</title>
+<title>Connect 4 - Online Edition</title>
 <style>
   :root {
     --bg-color: #bbccc3;
@@ -181,7 +181,7 @@
   }
 
   .p1, .p2 {
-    color: transparent; /* 文字を隠す */
+    color: transparent;
   }
 
   .p1::before, .p2::before {
@@ -234,12 +234,17 @@
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
   }
+  
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 </style>
 </head>
 <body>
 
 <div id="game-container">
-  <h1>CONNECT 4</h1>
+  <h1>CONNECT 4 ONLINE</h1>
   
   <div id="score">
     <div id="p1-card" class="player-card active-1">
@@ -256,11 +261,11 @@
   </div>
 
   <div id="status-container">
-    <div id="status">Player 1 のターンです</div>
+    <div id="status">ゲームを開始してください</div>
   </div>
 
   <div id="board"></div>
-  <button class="action-btn" onclick="resetGame()">Restart Game</button>
+  <button class="action-btn" id="start-btn">Matchmaking</button>
 </div>
 
 <script>
@@ -269,7 +274,7 @@
   const WIN_TARGET = 3;
   const ITEM_TYPES = ['x2', '💣', '🌪', '⇔'];
   
-  let board = [];
+  let board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
   let currentPlayer = 1;
   let scores = { 1: 0, 2: 0 };
   let gameOver = false;
@@ -277,9 +282,19 @@
   let playerItems = { 1: [], 2: [] };
   let activeItemIndex = -1;
   let currentHighlights = [];
-  
   let pieceIdCounter = 1;
   let claimedPieces = new Set();
+
+  let myPlayerId = 'p_' + Date.now() + Math.floor(Math.random() * 10000);
+  let sysState = {
+      game_id: null,
+      my_role: null,
+      player_1_id: null,
+      player_2_id: null,
+      current_turn_id: null,
+      status: "init"
+  };
+  let pollingInterval = null;
 
   const boardEl = document.getElementById('board');
   const statusEl = document.getElementById('status');
@@ -289,46 +304,35 @@
   const p2Card = document.getElementById('p2-card');
   const p1ItemsEl = document.getElementById('p1-items');
   const p2ItemsEl = document.getElementById('p2-items');
+  const startBtn = document.getElementById('start-btn');
 
-  function init() {
-    board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
-    currentPlayer = 1;
-    scores = { 1: 0, 2: 0 };
-    gameOver = false;
-    playerItems = { 1: [], 2: [] };
-    activeItemIndex = -1;
-    currentHighlights = [];
-    pieceIdCounter = 1;
-    claimedPieces.clear();
-    
-    questionMarks.clear();
-    while (questionMarks.size < 6) {
-      let r = Math.floor(Math.random() * ROWS);
-      let c = Math.floor(Math.random() * COLS);
-      questionMarks.add(`${r},${c}`);
-    }
-
+  function initBoardDOM() {
     boardEl.innerHTML = '';
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const cell = document.createElement('div');
+        cell.className = 'cell';
         cell.dataset.row = r;
         cell.dataset.col = c;
         cell.addEventListener('click', () => handleColumnClick(c));
         boardEl.appendChild(cell);
       }
     }
-    renderAll();
   }
 
   function toggleItem(index) {
-    if (gameOver) return;
+    if (gameOver || sysState.status !== 'playing') return;
+    let myNum = sysState.my_role === 'player_1' ? 1 : 2;
+    if (currentPlayer !== myNum) return;
+    
     activeItemIndex = activeItemIndex === index ? -1 : index;
     renderItems();
   }
 
-  function handleColumnClick(col) {
-    if (gameOver) return;
+  async function handleColumnClick(col) {
+    if (gameOver || sysState.status !== 'playing') return;
+    let myNum = sysState.my_role === 'player_1' ? 1 : 2;
+    if (currentPlayer !== myNum) return;
     
     let row = ROWS - 1;
     while (row >= 0 && board[row][col] !== null) {
@@ -376,11 +380,8 @@
           }
         }
       }
-      
       allPieces.sort(() => Math.random() - 0.5);
-      
       let isRight = Math.random() < 0.5;
-      
       for (let piece of allPieces) {
         let dropCol;
         let attempts = 0;
@@ -389,20 +390,15 @@
           let biasedIndex = Math.floor(rand * COLS);
           if (biasedIndex >= COLS) biasedIndex = COLS - 1;
           dropCol = isRight ? (COLS - 1 - biasedIndex) : biasedIndex;
-          
           attempts++;
-          if (attempts > 50) {
-            dropCol = Math.floor(Math.random() * COLS);
-          }
+          if (attempts > 50) dropCol = Math.floor(Math.random() * COLS);
         } while (board[0][dropCol] !== null);
         
         let targetRow = ROWS - 1;
         while (targetRow >= 0 && board[targetRow][dropCol] !== null) {
           targetRow--;
         }
-        if (targetRow >= 0) {
-          board[targetRow][dropCol] = piece;
-        }
+        if (targetRow >= 0) board[targetRow][dropCol] = piece;
       }
     } else if (usedItem === '⇔') {
       const targets = [[0, 0], [1, 0], [0, 1], [0, -1]];
@@ -420,29 +416,19 @@
     checkQuestionMarks();
     calculateScores();
 
-    if (scores[currentPlayer] >= WIN_TARGET) {
-      endGame(currentPlayer);
-      return;
-    }
-
-    let opp = currentPlayer === 1 ? 2 : 1;
-    if (scores[opp] >= WIN_TARGET) {
-      endGame(opp);
-      return;
-    }
-
-    if (isBoardFull()) {
+    if (scores[currentPlayer] >= WIN_TARGET || scores[currentPlayer === 1 ? 2 : 1] >= WIN_TARGET) {
+      gameOver = true;
+    } else if (isBoardFull()) {
       explodeBottomRows();
       applyGravity();
       checkQuestionMarks();
       calculateScores();
-      
-      if (scores[currentPlayer] >= WIN_TARGET) return endGame(currentPlayer);
-      if (scores[opp] >= WIN_TARGET) return endGame(opp);
+      if (scores[currentPlayer] >= WIN_TARGET || scores[currentPlayer === 1 ? 2 : 1] >= WIN_TARGET) gameOver = true;
     }
 
     currentPlayer = currentPlayer === 1 ? 2 : 1;
     renderAll();
+    await sendStateUpdate();
   }
 
   function applyGravity() {
@@ -493,21 +479,15 @@
   function calculateScores() {
     scores = { 1: 0, 2: 0 };
     currentHighlights = [];
-
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         if (board[r][c] === null) continue;
         let player = board[r][c].p;
-
         const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
         directions.forEach(([dr, dc]) => {
           let prevR = r - dr;
           let prevC = c - dc;
-          
-          if (prevR >= 0 && prevR < ROWS && prevC >= 0 && prevC < COLS && board[prevR][prevC] !== null && board[prevR][prevC].p === player) {
-            return; 
-          }
-
+          if (prevR >= 0 && prevR < ROWS && prevC >= 0 && prevC < COLS && board[prevR][prevC] !== null && board[prevR][prevC].p === player) return; 
           let k = 1;
           let lineCoords = [`${r},${c}`];
           while (true) {
@@ -520,14 +500,11 @@
               break;
             }
           }
-
           let lines = Math.floor(k / 4);
           if (lines > 0) {
             scores[player] += lines;
             let highlightCount = lines * 4;
-            for (let i = 0; i < highlightCount; i++) {
-              currentHighlights.push(lineCoords[i]);
-            }
+            for (let i = 0; i < highlightCount; i++) currentHighlights.push(lineCoords[i]);
           }
         });
       }
@@ -536,15 +513,6 @@
 
   function isBoardFull() {
     return board[0].every(cell => cell !== null);
-  }
-
-  function endGame(winner) {
-    gameOver = true;
-    renderAll();
-    statusEl.textContent = `PLAYER ${winner} WINNERS!`;
-    statusEl.style.color = winner === 1 ? 'var(--p1-color-1)' : 'var(--p2-color-1)';
-    p1Card.classList.toggle('active-1', winner === 1);
-    p2Card.classList.toggle('active-2', winner === 2);
   }
 
   function renderAll() {
@@ -573,11 +541,26 @@
     score1El.textContent = scores[1];
     score2El.textContent = scores[2];
     
-    if (!gameOver) {
-      statusEl.textContent = `Player ${currentPlayer} のターン`;
-      statusEl.style.color = "var(--text-main)";
+    if (gameOver) {
+      let winner = scores[1] >= WIN_TARGET ? 1 : 2;
+      statusEl.textContent = `PLAYER ${winner} WINS!`;
+      statusEl.style.color = winner === 1 ? 'var(--p1-color-1)' : 'var(--p2-color-1)';
+      p1Card.classList.toggle('active-1', winner === 1);
+      p2Card.classList.toggle('active-2', winner === 2);
+    } else if (sysState.status === 'playing') {
+      let myNum = sysState.my_role === 'player_1' ? 1 : 2;
+      if (currentPlayer === myNum) {
+        statusEl.textContent = `あなたのターンです`;
+        statusEl.style.color = "var(--text-main)";
+      } else {
+        statusEl.textContent = `相手のターンを待っています...`;
+        statusEl.style.color = "var(--text-muted)";
+      }
       p1Card.classList.toggle('active-1', currentPlayer === 1);
       p2Card.classList.toggle('active-2', currentPlayer === 2);
+    } else if (sysState.status === 'waiting') {
+      statusEl.textContent = `対戦相手を待っています...`;
+      statusEl.style.color = "var(--text-main)";
     }
     
     renderItems();
@@ -589,8 +572,9 @@
       const btn = document.createElement('button');
       btn.className = 'item-btn';
       btn.textContent = item;
-      if (currentPlayer === 1 && activeItemIndex === idx) btn.classList.add('selected');
-      btn.onclick = () => { if (currentPlayer === 1) toggleItem(idx); };
+      let myNum = sysState.my_role === 'player_1' ? 1 : 2;
+      if (currentPlayer === 1 && myNum === 1 && activeItemIndex === idx) btn.classList.add('selected');
+      btn.onclick = () => { if (myNum === 1) toggleItem(idx); };
       p1ItemsEl.appendChild(btn);
     });
 
@@ -599,18 +583,110 @@
       const btn = document.createElement('button');
       btn.className = 'item-btn';
       btn.textContent = item;
-      if (currentPlayer === 2 && activeItemIndex === idx) btn.classList.add('selected');
-      btn.onclick = () => { if (currentPlayer === 2) toggleItem(idx); };
+      let myNum = sysState.my_role === 'player_1' ? 1 : 2;
+      if (currentPlayer === 2 && myNum === 2 && activeItemIndex === idx) btn.classList.add('selected');
+      btn.onclick = () => { if (myNum === 2) toggleItem(idx); };
       p2ItemsEl.appendChild(btn);
     });
   }
 
-  function resetGame() {
-    init();
+  async function sendStateUpdate() {
+    let state = {
+      board: board,
+      scores: scores,
+      questionMarks: Array.from(questionMarks),
+      playerItems: playerItems,
+      claimedPieces: Array.from(claimedPieces),
+      pieceIdCounter: pieceIdCounter
+    };
+    
+    let next_turn_id = (currentPlayer === 1) ? sysState.player_1_id : sysState.player_2_id;
+    let winner_id = null;
+    let newStatus = 'playing';
+    
+    if (gameOver) {
+      newStatus = 'finished';
+      winner_id = (scores[1] >= WIN_TARGET) ? sysState.player_1_id : sysState.player_2_id;
+    }
+    
+    await fetch('api_update_state.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        game_id: sysState.game_id,
+        game_state: JSON.stringify(state),
+        current_turn_id: next_turn_id,
+        status: newStatus,
+        winner_id: winner_id
+      })
+    });
+    fetchState();
   }
 
-  init();
-</script>
+  startBtn.addEventListener('click', async () => {
+    try {
+      const response = await fetch('api_find_game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ my_player_id: myPlayerId })
+      });
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
 
+      sysState.game_id = data.game_id;
+      sysState.my_role = data.role;
+      startBtn.disabled = true;
+      startBtn.textContent = sysState.my_role === 'player_1' ? "P1: Waiting..." : "P2: Joined";
+      startPolling();
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  function startPolling() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    fetchState();
+    pollingInterval = setInterval(fetchState, 1500);
+  }
+
+  async function fetchState() {
+    if (!sysState.game_id) return;
+    try {
+      const response = await fetch(`api_get_state.php?game_id=${sysState.game_id}`);
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
+
+      sysState.status = data.status;
+      sysState.current_turn_id = data.current_turn_id;
+      sysState.winner_id = data.winner_id;
+      sysState.player_1_id = data.player_1_id;
+      sysState.player_2_id = data.player_2_id;
+
+      if (data.game_state) {
+        let stateObj = JSON.parse(data.game_state);
+        board = stateObj.board;
+        scores = stateObj.scores;
+        questionMarks = new Set(stateObj.questionMarks);
+        playerItems = stateObj.playerItems;
+        claimedPieces = new Set(stateObj.claimedPieces);
+        pieceIdCounter = stateObj.pieceIdCounter;
+      }
+
+      currentPlayer = (sysState.current_turn_id === sysState.player_1_id) ? 1 : 2;
+      if (sysState.status === 'finished') gameOver = true;
+      
+      calculateScores();
+      renderAll();
+
+      if (sysState.status === 'finished') {
+        clearInterval(pollingInterval);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  initBoardDOM();
+</script>
 </body>
 </html>

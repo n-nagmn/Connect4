@@ -147,8 +147,8 @@
 
   #board {
     display: inline-grid;
-    grid-template-columns: repeat(9, 55px);
-    grid-template-rows: repeat(7, 55px);
+    grid-template-columns: repeat(7, 55px);
+    grid-template-rows: repeat(6, 55px);
     gap: 10px;
     background: var(--board-bg);
     backdrop-filter: blur(12px);
@@ -269,8 +269,8 @@
 </div>
 
 <script>
-  const ROWS = 7;
-  const COLS = 9;
+  const ROWS = 6;
+  const COLS = 7;
   const WIN_TARGET = 3;
   const ITEM_TYPES = ['x2', '💣', '🌪', '⇔'];
   
@@ -389,7 +389,7 @@
         let dropCol;
         let attempts = 0;
         do {
-          let rand = Math.pow(Math.random(), 1.5);
+          let rand = Math.pow(Math.random(), 3.0);
           let biasedIndex = Math.floor(rand * COLS);
           if (biasedIndex >= COLS) biasedIndex = COLS - 1;
           dropCol = isRight ? (COLS - 1 - biasedIndex) : biasedIndex;
@@ -471,10 +471,9 @@
 
   function explodeBottomRows() {
     for (let c = 0; c < COLS; c++) {
-      board[6][c] = board[2][c];
-      board[5][c] = board[1][c];
-      board[4][c] = board[0][c];
-      board[3][c] = null;
+      board[5][c] = board[2][c];
+      board[4][c] = board[1][c];
+      board[3][c] = board[0][c];
       board[2][c] = null;
       board[1][c] = null;
       board[0][c] = null;

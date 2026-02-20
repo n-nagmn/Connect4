@@ -40,15 +40,15 @@ if ($waiting_game) {
     } else {
         $initial_qmarks = [];
         while (count($initial_qmarks) < 6) {
-            $r = rand(0, 6);
-            $c = rand(0, 8);
+            $r = rand(0, 5);
+            $c = rand(0, 6);
             $key = "$r,$c";
             if (!in_array($key, $initial_qmarks)) {
                 $initial_qmarks[] = $key;
             }
         }
         $initial_state = json_encode([
-            'board' => array_fill(0, 7, array_fill(0, 9, null)),
+            'board' => array_fill(0, 6, array_fill(0, 7, null)),
             'scores' => ['1' => 0, '2' => 0],
             'questionMarks' => $initial_qmarks,
             'playerItems' => ['1' => [], '2' => []],

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Connect 4 (7x9, 3 Lines to Win)</title>
+<title>Connect 4 (7x9, Items & Explosion)</title>
 <style>
   body {
     font-family: sans-serif;
@@ -19,11 +19,40 @@
   }
   #info {
     margin-bottom: 20px;
+    width: 100%;
+    max-width: 600px;
   }
   #score {
     font-size: 1.5em;
     font-weight: bold;
     margin-bottom: 10px;
+    display: flex;
+    justify-content: space-around;
+  }
+  .player-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .items-container {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+    min-height: 35px;
+  }
+  .item-btn {
+    padding: 5px 10px;
+    font-size: 1.2em;
+    border: 2px solid #ccc;
+    border-radius: 5px;
+    background: #fff;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .item-btn.selected {
+    border-color: #00ff00;
+    background: #e0ffe0;
+    transform: scale(1.1);
   }
   #status {
     font-size: 1.2em;
@@ -31,6 +60,8 @@
     border-radius: 5px;
     background: #fff;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 15px;
+    display: inline-block;
   }
   #board {
     display: inline-grid;
@@ -51,6 +82,13 @@
     box-shadow: inset 0 3px 5px rgba(0,0,0,0.2);
     transition: background 0.2s, transform 0.1s;
     position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 28px;
+    font-weight: bold;
+    color: rgba(0, 0, 0, 0.4);
+    user-select: none;
   }
   .cell:hover {
     transform: scale(0.95);
@@ -58,10 +96,12 @@
   .p1 {
     background: #ff4444;
     box-shadow: inset 0 -3px 5px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.2);
+    color: transparent;
   }
   .p2 {
     background: #ffdd00;
     box-shadow: inset 0 -3px 5px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.2);
+    color: transparent;
   }
   .highlight::after {
     content: '';
@@ -75,7 +115,7 @@
     border-radius: 50%;
     box-shadow: 0 0 10px #00ff00;
   }
-  button {
+  button.action-btn {
     margin-top: 20px;
     padding: 10px 20px;
     font-size: 1em;
@@ -85,7 +125,7 @@
     background-color: #333;
     color: white;
   }
-  button:hover {
+  button.action-btn:hover {
     background-color: #555;
   }
 </style>
@@ -94,27 +134,43 @@
 
 <div id="game-container">
   <div id="info">
-    <div id="score">プレイヤー1 (赤): 0&nbsp;&nbsp;&nbsp;プレイヤー2 (黄): 0</div>
     <div id="status">プレイヤー1 (赤) のターンです</div>
+    <div id="score">
+      <div class="player-info" style="color:#cc0000;">
+        <div>プレイヤー1 (赤): <span id="score1">0</span></div>
+        <div id="p1-items" class="items-container"></div>
+      </div>
+      <div class="player-info" style="color:#b8860b;">
+        <div>プレイヤー2 (黄): <span id="score2">0</span></div>
+        <div id="p2-items" class="items-container"></div>
+      </div>
+    </div>
   </div>
   <div id="board"></div>
-  <button onclick="resetGame()">ゲームをリセット</button>
+  <button class="action-btn" onclick="resetGame()">ゲームをリセット</button>
 </div>
 
 <script>
   const ROWS = 7;
   const COLS = 9;
   const WIN_TARGET = 3;
+  const ITEM_TYPES = ['x2', '💣', '🌪', '⇔'];
   
   let board = [];
   let currentPlayer = 1;
   let scores = { 1: 0, 2: 0 };
   let foundLines = new Set();
   let gameOver = false;
+  let questionMarks = new Set();
+  let playerItems = { 1: [], 2: [] };
+  let activeItemIndex = -1;
 
   const boardEl = document.getElementById('board');
   const statusEl = document.getElementById('status');
-  const scoreEl = document.getElementById('score');
+  const score1El = document.getElementById('score1');
+  const score2El = document.getElementById('score2');
+  const p1ItemsEl = document.getElementById('p1-items');
+  const p2ItemsEl = document.getElementById('p2-items');
 
   function init() {
     board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
@@ -122,19 +178,33 @@
     scores = { 1: 0, 2: 0 };
     foundLines.clear();
     gameOver = false;
+    playerItems = { 1: [], 2: [] };
+    activeItemIndex = -1;
     
+    questionMarks.clear();
+    while (questionMarks.size < 6) {
+      let r = Math.floor(Math.random() * (ROWS - 1));
+      let c = Math.floor(Math.random() * COLS);
+      questionMarks.add(`${r},${c}`);
+    }
+
     boardEl.innerHTML = '';
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const cell = document.createElement('div');
-        cell.classList.add('cell');
         cell.dataset.row = r;
         cell.dataset.col = c;
         cell.addEventListener('click', () => handleColumnClick(c));
         boardEl.appendChild(cell);
       }
     }
-    updateUI();
+    renderAll();
+  }
+
+  function toggleItem(index) {
+    if (gameOver) return;
+    activeItemIndex = activeItemIndex === index ? -1 : index;
+    renderItems();
   }
 
   function handleColumnClick(col) {
@@ -144,66 +214,154 @@
     while (row >= 0 && board[row][col] !== 0) {
       row--;
     }
-    
     if (row < 0) return;
 
-    board[row][col] = currentPlayer;
-    const cellIdx = row * COLS + col;
-    const cellEl = boardEl.children[cellIdx];
-    cellEl.classList.add(currentPlayer === 1 ? 'p1' : 'p2');
+    let usedItem = null;
+    if (activeItemIndex !== -1 && playerItems[currentPlayer][activeItemIndex]) {
+      usedItem = playerItems[currentPlayer].splice(activeItemIndex, 1)[0];
+      activeItemIndex = -1;
+    }
 
-    checkNewLines(row, col, currentPlayer);
+    board[row][col] = currentPlayer;
+
+    if (usedItem === 'x2') {
+      if (row - 1 >= 0) board[row - 1][col] = currentPlayer;
+    } else if (usedItem === '💣') {
+      if (row + 1 < ROWS) board[row + 1][col] = 0;
+      if (col + 1 < COLS) board[row][col + 1] = 0;
+      if (col - 1 >= 0) board[row][col - 1] = 0;
+    } else if (usedItem === '🌪') {
+      let allPieces = [];
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (board[r][c] !== 0) {
+            allPieces.push(board[r][c]);
+            board[r][c] = 0;
+          }
+        }
+      }
+      allPieces.sort(() => Math.random() - 0.5);
+      for (let p of allPieces) {
+        let rCol = Math.floor(Math.random() * COLS);
+        let rRow = ROWS - 1;
+        while (rRow >= 0 && board[rRow][rCol] !== 0) rRow--;
+        if (rRow >= 0) board[rRow][rCol] = p;
+      }
+    } else if (usedItem === '⇔') {
+      let opp = currentPlayer === 1 ? 2 : 1;
+      if (row + 1 < ROWS) board[row + 1][col] = currentPlayer;
+      if (col + 1 < COLS) board[row][col + 1] = currentPlayer;
+      if (col - 1 >= 0) board[row][col - 1] = currentPlayer;
+      board[row][col] = opp;
+    }
+
+    applyGravity();
+    checkQuestionMarks();
+    recalculateScores();
 
     if (scores[currentPlayer] >= WIN_TARGET) {
-      statusEl.textContent = `プレイヤー${currentPlayer} (${currentPlayer === 1 ? '赤' : '黄'}) の勝利！`;
-      statusEl.style.color = currentPlayer === 1 ? '#cc0000' : '#b8860b';
-      gameOver = true;
+      endGame(currentPlayer);
+      return;
+    }
+
+    let opp = currentPlayer === 1 ? 2 : 1;
+    if (scores[opp] >= WIN_TARGET) {
+      endGame(opp);
       return;
     }
 
     if (isBoardFull()) {
-      statusEl.textContent = "引き分けです！";
-      gameOver = true;
-      return;
+      explodeBottomRows();
+      applyGravity();
+      checkQuestionMarks();
+      recalculateScores();
+      
+      if (scores[currentPlayer] >= WIN_TARGET) return endGame(currentPlayer);
+      if (scores[opp] >= WIN_TARGET) return endGame(opp);
     }
 
     currentPlayer = currentPlayer === 1 ? 2 : 1;
-    updateUI();
+    renderAll();
   }
 
-  function checkNewLines(row, col, player) {
-    const directions = [
-      [0, 1],  
-      [1, 0],  
-      [1, 1],  
-      [1, -1]  
-    ];
-
-    directions.forEach(([dr, dc]) => {
-      for (let offset = 0; offset <= 3; offset++) {
-        let startR = row - dr * offset;
-        let startC = col - dc * offset;
-        
-        let validLine = true;
-        let lineCoords = [];
-
-        for (let i = 0; i < 4; i++) {
-          let r = startR + dr * i;
-          let c = startC + dc * i;
-          if (r < 0 || r >= ROWS || c < 0 || c >= COLS || board[r][c] !== player) {
-            validLine = false;
-            break;
-          }
-          lineCoords.push(`${r},${c}`);
+  function applyGravity() {
+    for (let c = 0; c < COLS; c++) {
+      let colPieces = [];
+      for (let r = ROWS - 1; r >= 0; r--) {
+        if (board[r][c] !== 0) {
+          colPieces.push(board[r][c]);
+          board[r][c] = 0;
         }
+      }
+      let r = ROWS - 1;
+      for (let piece of colPieces) {
+        board[r][c] = piece;
+        r--;
+      }
+    }
+  }
 
-        if (validLine) {
-          const signature = lineCoords.sort().join('|');
-          if (!foundLines.has(signature)) {
-            foundLines.add(signature);
-            scores[player]++;
-            highlightLine(lineCoords);
-          }
+  function checkQuestionMarks() {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        let key = `${r},${c}`;
+        if (board[r][c] !== 0 && questionMarks.has(key)) {
+          questionMarks.delete(key);
+          let randomItem = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
+          playerItems[board[r][c]].push(randomItem);
+        }
+      }
+    }
+    if (questionMarks.size < 2) {
+      let r = Math.floor(Math.random() * (ROWS - 1));
+      let c = Math.floor(Math.random() * COLS);
+      if (board[r][c] === 0) questionMarks.add(`${r},${c}`);
+    }
+  }
+
+  function explodeBottomRows() {
+    for (let c = 0; c < COLS; c++) {
+      board[6][c] = board[2][c];
+      board[5][c] = board[1][c];
+      board[4][c] = board[0][c];
+      board[3][c] = 0;
+      board[2][c] = 0;
+      board[1][c] = 0;
+      board[0][c] = 0;
+    }
+  }
+
+  function recalculateScores() {
+    scores = { 1: 0, 2: 0 };
+    foundLines.clear();
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (board[r][c] !== 0) {
+          registerExistingLines(r, c, board[r][c]);
+        }
+      }
+    }
+  }
+
+  function registerExistingLines(row, col, player) {
+    const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+    directions.forEach(([dr, dc]) => {
+      let validLine = true;
+      let lineCoords = [];
+      for (let i = 0; i < 4; i++) {
+        let r = row + dr * i;
+        let c = col + dc * i;
+        if (r < 0 || r >= ROWS || c < 0 || c >= COLS || board[r][c] !== player) {
+          validLine = false;
+          break;
+        }
+        lineCoords.push(`${r},${c}`);
+      }
+      if (validLine) {
+        const signature = lineCoords.sort().join('|');
+        if (!foundLines.has(signature)) {
+          foundLines.add(signature);
+          scores[player]++;
         }
       }
     });
@@ -221,11 +379,62 @@
     return board[0].every(cell => cell !== 0);
   }
 
-  function updateUI() {
-    if (gameOver) return;
-    scoreEl.innerHTML = `<span style="color:#cc0000;">プレイヤー1 (赤): ${scores[1]}</span>&nbsp;&nbsp;&nbsp;<span style="color:#b8860b;">プレイヤー2 (黄): ${scores[2]}</span>`;
-    statusEl.textContent = `プレイヤー${currentPlayer} (${currentPlayer === 1 ? '赤' : '黄'}) のターンです`;
-    statusEl.style.color = "#000";
+  function endGame(winner) {
+    gameOver = true;
+    renderAll();
+    statusEl.textContent = `プレイヤー${winner} (${winner === 1 ? '赤' : '黄'}) の勝利！`;
+    statusEl.style.color = winner === 1 ? '#cc0000' : '#b8860b';
+  }
+
+  function renderAll() {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const cellIdx = r * COLS + c;
+        const cellEl = boardEl.children[cellIdx];
+        cellEl.className = 'cell';
+        cellEl.textContent = '';
+        
+        if (board[r][c] === 1) cellEl.classList.add('p1');
+        else if (board[r][c] === 2) cellEl.classList.add('p2');
+        else if (questionMarks.has(`${r},${c}`)) cellEl.textContent = '?';
+      }
+    }
+
+    foundLines.forEach(signature => {
+      highlightLine(signature.split('|'));
+    });
+
+    score1El.textContent = scores[1];
+    score2El.textContent = scores[2];
+    
+    if (!gameOver) {
+      statusEl.textContent = `プレイヤー${currentPlayer} (${currentPlayer === 1 ? '赤' : '黄'}) のターンです`;
+      statusEl.style.color = "#000";
+    }
+    
+    renderItems();
+  }
+
+  function renderItems() {
+    p1ItemsEl.innerHTML = '';
+    playerItems[1].forEach((item, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'item-btn';
+      btn.textContent = item;
+      if (currentPlayer === 1 && activeItemIndex === idx) btn.classList.add('selected');
+      btn.onclick = () => { if (currentPlayer === 1) toggleItem(idx); };
+      p1ItemsEl.appendChild(btn);
+    });
+
+    p2ItemsEl.innerHTML = '';
+    playerItems[2].forEach((item, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'item-btn';
+      btn.textContent = item;
+      if (currentPlayer === 2 && activeItemIndex === idx) btn.classList.add('selected');
+      btn.onclick = () => { if (currentPlayer === 2) toggleItem(idx); };
+      p2ItemsEl.appendChild(btn);
+    });
   }
 
   function resetGame() {

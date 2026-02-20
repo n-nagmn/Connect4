@@ -231,6 +231,7 @@
       if (col + 1 < COLS) board[row][col + 1] = 0;
       if (col - 1 >= 0) board[row][col - 1] = 0;
     } else if (usedItem === '🌪') {
+      // 1. 全コマ回収
       let allPieces = [];
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
@@ -240,21 +241,51 @@
           }
         }
       }
+      
+      // 2. 上2段を空けるため、下5段分のマス数(45マス)まで0（白マス）で埋める
+      const TARGET_CELLS = (ROWS - 2) * COLS;
+      while (allPieces.length < TARGET_CELLS) {
+        allPieces.push(0);
+      }
+      
+      // 3. 白マスを含めてシャッフル
       allPieces.sort(() => Math.random() - 0.5);
       
+      // 4. 下5段にランダム配置
       let pIdx = 0;
-      let isLeft = Math.random() < 0.5;
-      
-      if (isLeft) {
-        for (let c = 0; c < COLS && pIdx < allPieces.length; c++) {
-          for (let r = ROWS - 1; r >= 0 && pIdx < allPieces.length; r--) {
-            board[r][c] = allPieces[pIdx++];
-          }
+      for (let r = 2; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          board[r][c] = allPieces[pIdx++];
         }
-      } else {
-        for (let c = COLS - 1; c >= 0 && pIdx < allPieces.length; c--) {
-          for (let r = ROWS - 1; r >= 0 && pIdx < allPieces.length; r--) {
-            board[r][c] = allPieces[pIdx++];
+      }
+
+      // 5. 砂みたいに右下に集める（右下方向への重力シミュレーション）
+      let moved = true;
+      while(moved) {
+        moved = false;
+        // 右下から左上に向かって走査
+        for (let r = ROWS - 1; r >= 2; r--) {
+          for (let c = COLS - 1; c >= 0; c--) {
+            if (board[r][c] !== 0) {
+              // ①右下へスライド
+              if (r + 1 < ROWS && c + 1 < COLS && board[r + 1][c + 1] === 0) {
+                board[r + 1][c + 1] = board[r][c];
+                board[r][c] = 0;
+                moved = true;
+              }
+              // ②真下へ落下
+              else if (r + 1 < ROWS && board[r + 1][c] === 0) {
+                board[r + 1][c] = board[r][c];
+                board[r][c] = 0;
+                moved = true;
+              }
+              // ③右へスライド
+              else if (c + 1 < COLS && board[r][c + 1] === 0) {
+                board[r][c + 1] = board[r][c];
+                board[r][c] = 0;
+                moved = true;
+              }
+            }
           }
         }
       }
@@ -323,7 +354,8 @@
         if (board[r][c] !== 0 && questionMarks.has(key)) {
           questionMarks.delete(key);
           let randomItem = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
-          playerItems[board[r][c]].push(randomItem);
+          // 既存の配列を上書きして常に1つだけ持てるようにする
+          playerItems[board[r][c]] = [randomItem];
         }
       }
     }

@@ -165,7 +165,6 @@
   let activeItemIndex = -1;
   let currentHighlights = [];
   
-  // コマごとのIDを発行し、どのコマが?を取得済みか管理する
   let pieceIdCounter = 1;
   let claimedPieces = new Set();
 
@@ -231,7 +230,6 @@
     let newPiece = { p: currentPlayer, id: pieceIdCounter++ };
     board[row][col] = newPiece;
 
-    // 落とした場所が?マスだった場合、即座にアイテムを付与（💣などで即消滅する対策）
     if (questionMarks.has(`${row},${col}`)) {
       let randomItem = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
       playerItems[currentPlayer] = [randomItem];
@@ -249,51 +247,46 @@
         }
       }
     } else if (usedItem === '💣') {
-      board[row][col] = null; // 自分のコマを削除
-      if (row + 1 < ROWS) board[row + 1][col] = null; // 下を削除
-      if (col + 1 < COLS) board[row][col + 1] = null; // 右を削除
-      if (col - 1 >= 0) board[row][col - 1] = null; // 左を削除
+      board[row][col] = null; 
+      if (row + 1 < ROWS) board[row + 1][col] = null; 
+      if (col + 1 < COLS) board[row][col + 1] = null; 
+      if (col - 1 >= 0) board[row][col - 1] = null; 
     } else if (usedItem === '🌪') {
       let allPieces = [];
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
-          allPieces.push(board[r][c]); // nullも含めてシャッフル
-          board[r][c] = null;
+          if (board[r][c] !== null) {
+            allPieces.push(board[r][c]);
+            board[r][c] = null;
+          }
         }
       }
       
       allPieces.sort(() => Math.random() - 0.5);
       
-      let pIdx = 0;
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          board[r][c] = allPieces[pIdx++];
-        }
-      }
-
-      let moved = true;
-      while(moved) {
-        moved = false;
-        for (let r = ROWS - 1; r >= 0; r--) {
-          for (let c = COLS - 1; c >= 0; c--) {
-            if (board[r][c] !== null) {
-              if (r + 1 < ROWS && c + 1 < COLS && board[r + 1][c + 1] === null) {
-                board[r + 1][c + 1] = board[r][c];
-                board[r][c] = null;
-                moved = true;
-              }
-              else if (r + 1 < ROWS && board[r + 1][c] === null) {
-                board[r + 1][c] = board[r][c];
-                board[r][c] = null;
-                moved = true;
-              }
-              else if (c + 1 < COLS && board[r][c + 1] === null) {
-                board[r][c + 1] = board[r][c];
-                board[r][c] = null;
-                moved = true;
-              }
-            }
+      let isRight = Math.random() < 0.5;
+      
+      for (let piece of allPieces) {
+        let dropCol;
+        let attempts = 0;
+        do {
+          let rand = Math.pow(Math.random(), 1.5);
+          let biasedIndex = Math.floor(rand * COLS);
+          if (biasedIndex >= COLS) biasedIndex = COLS - 1;
+          dropCol = isRight ? (COLS - 1 - biasedIndex) : biasedIndex;
+          
+          attempts++;
+          if (attempts > 50) {
+            dropCol = Math.floor(Math.random() * COLS);
           }
+        } while (board[0][dropCol] !== null);
+        
+        let targetRow = ROWS - 1;
+        while (targetRow >= 0 && board[targetRow][dropCol] !== null) {
+          targetRow--;
+        }
+        if (targetRow >= 0) {
+          board[targetRow][dropCol] = piece;
         }
       }
     } else if (usedItem === '⇔') {
@@ -358,13 +351,12 @@
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         let key = `${r},${c}`;
-        // ？マスにコマが存在し、まだアイテムを取得していないコマの場合
         if (questionMarks.has(key) && board[r][c] !== null) {
           let piece = board[r][c];
           if (!claimedPieces.has(piece.id)) {
             claimedPieces.add(piece.id);
             let randomItem = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
-            playerItems[piece.p] = [randomItem]; // 所持アイテムは1つ（上書き）
+            playerItems[piece.p] = [randomItem];
           }
         }
       }
@@ -451,7 +443,6 @@
           if (board[r][c].p === 1) cellEl.classList.add('p1');
           else if (board[r][c].p === 2) cellEl.classList.add('p2');
         } else if (questionMarks.has(`${r},${c}`)) {
-          // コマが存在しない場合は？を表示する
           cellEl.textContent = '?';
         }
       }
